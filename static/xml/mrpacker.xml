@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<Container>
+  <Row>
+    <Column class="navbar">
+      <Row class="top-align">
+        <Row class="button-wrapper">
+          {{ 'account-selector' | make_special_button }}
+        </Row>
+        <Row class="button-wrapper">
+          {{ 'home' | make_nav_button }}
+        </Row>
+        <Row class="button-wrapper">
+          {{ 'browse' | make_nav_button }}
+        </Row>
+        <Row class="button-wrapper">
+          {{ 'library' | make_nav_button }}
+        </Row>
+      </Row>
+      <Row class="bottom-align">
+        <Row class="button-wrapper">
+          {{ 'new-profile' | make_special_button }}
+        </Row>
+        <Row class="button-wrapper">
+          {{ 'settings' | make_nav_button }}
+        </Row>
+      </Row>
+    </Column>
+    <Column>
+      <Row class="metabar">
+        <Column class="history">
+          <Button class="history-backward">
+            <Icon />
+          </Button>
+          <Button class="history-forward">
+            <Icon />
+          </Button>
+        </Column>
+        <Column>
+          <Title>{{ title }}</Title>
+          <Row></Row>
+        </Column>
+      </Row>
+      <Row id="page-container">
+        {{ include_tree("home") }}
+      </Row>
+    </Column>
+  </Row>
+</Container>
