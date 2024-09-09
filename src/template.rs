@@ -32,7 +32,7 @@ pub type StoreEntryAsync<'a> = AsyncHandle<StoreEntry<'a>>;
 
 pub struct Store<'a> {
     pub env: AsyncHandle<Jinja::Environment<'a>>,
-    indices: AsyncHandle<HashMap<String, StoreEntryAsync<'a>>>,
+    indices: AsyncHandle<HashMap<StoreIndex, StoreEntryAsync<'a>>>,
 }
 
 impl<'a> StoreEntry<'a> {

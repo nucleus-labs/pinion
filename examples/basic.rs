@@ -1,12 +1,11 @@
 
 use std::ffi::OsStr;
 
-use rs_quill::template as Template;
-use rs_quill::xml as Xml;
-// use rs_quill::selector as Select;
+use quill::template as Template;
+use quill::xml as Xml;
+// use quill::selector as Select;
 
 pub fn main() {
-    // Initialize the dom
     let template_store = Template::Store::new();
 
     let index_template = template_store.append("index".into(), OsStr::new("static/xml/mrpacker.xml".into())).unwrap();
@@ -39,7 +38,14 @@ pub fn main() {
 
     let dom_store = Xml::Store::new();
 
-    let _index_dom = dom_store.append("index".into(), index_template).unwrap();
+    let index_dom = dom_store.append("index".into(), index_template).unwrap();
+
+    {
+        let dom_guard = index_dom.read().unwrap();
+        println!("Found {} elements!", dom_guard.nodes.len());
+        let first = (**dom_guard.nodes.get(0).unwrap()).read().unwrap().name.clone();
+        println!("First element is of type '{}'", first)
+    }
 
     // let row_selector = Select::NodeSelector::new()
     //     .named("Row")

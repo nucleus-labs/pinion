@@ -1,5 +1,5 @@
 [package]
-name = "rs-quill"
+name = "quill"
 version = "0.1.0"
 edition = "2021"
 

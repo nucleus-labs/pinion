@@ -6,6 +6,8 @@ type AttributeSelector = HashMap<&'static str, &'static str>;
 type PseudoclassSelector = HashMap<&'static str, Arc<NodeSelector>>;
 
 pub struct NodeSelector {
+    namespace: Option<String>,                  // namespace()
+
     type_name: RwLock<Option<&'static str>>,    // named()
     id: RwLock<Option<&'static str>>,           // is()
     classes: RwLock<Arc<[&'static str]>>,       // classes()
@@ -23,6 +25,8 @@ pub trait MatchSelector {
 impl NodeSelector {
     pub fn any() -> Arc<NodeSelector> {
         Arc::new(Self{
+            namespace: None,
+
             type_name: None.into(),
             id: None.into(),
             classes: RwLock::new(Arc::new([])),
@@ -38,6 +42,8 @@ impl NodeSelector {
 
     pub fn new() -> Arc<NodeSelector> {
         Arc::new(Self{
+            namespace: None,
+
             type_name: None.into(),
             id: None.into(),
             classes: RwLock::new(Arc::new([])),
