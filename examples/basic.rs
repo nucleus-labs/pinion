@@ -1,9 +1,12 @@
+#![allow(unused_imports)]
 
+use std::time::Duration;
+use std::thread::sleep;
 use std::ffi::OsStr;
 
 use quill::template as Template;
 use quill::xml as Xml;
-// use quill::selector as Select;
+use quill::selector as Select;
 
 pub fn main() {
     let template_store = Template::Store::new();
@@ -23,7 +26,6 @@ pub fn main() {
         env_guard.add_filter("make_special_button", |button_id: &str| -> String {
             format!("<button class=\"special\" id=\"{}\" />", button_id)
         });
-
         
         let store_clone = template_store.clone();
         env_guard.add_function("include_tree", move |index: String| -> String {
@@ -42,13 +44,35 @@ pub fn main() {
 
     {
         let dom_guard = index_dom.read().unwrap();
-        println!("Found {} elements!", dom_guard.nodes.len());
+        println!("Found {} root elements!", dom_guard.nodes.len());
         let first = (**dom_guard.nodes.get(0).unwrap()).read().unwrap().name.clone();
-        println!("First element is of type '{}'", first)
+        println!("First element is of type '{}'", first);
     }
 
-    // let row_selector = Select::NodeSelector::new()
-    //     .named("Row")
-    //     ;
+    let row_selector = Select::NodeSelector::new()
+        .named("Container".into())
+            .child()
+            .named("Row".into())
+        .lock()
+        ;
+    println!("Searching for {}", row_selector.read().unwrap().to_string());
+
+    // loop for profiling purposes
+    loop {
+        template_store.has("index".into());
+        dom_store.has("index".into());
+        
+        let mut selector_handle = row_selector.write().unwrap();
+
+        let mut row_count: u32 = 0;
+        for root in index_dom.read().unwrap().nodes.iter() {
+            for _ in selector_handle.apply(root.clone()).iter() {
+                row_count += 1;
+            }
+        }
+        println!("There are {} 'Container > Row' elements!", row_count);
+
+        sleep(Duration::from_secs(1));
+    }
 
 }

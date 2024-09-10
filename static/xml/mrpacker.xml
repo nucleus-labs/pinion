@@ -37,7 +37,9 @@
         </Column>
         <Column>
           <Title>{{ title }}</Title>
-          <Row></Row>
+          <Container>
+            <Row></Row>
+          </Container>
         </Column>
       </Row>
       <Row id="page-container">
