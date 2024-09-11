@@ -1,4 +1,6 @@
 
+mod error;
+
 use xmltree as Xml;
 
 use std::collections::{BTreeMap, HashMap};
@@ -9,20 +11,9 @@ use std::vec::Vec;
 use crate::AsyncHandle;
 use crate::template as Templating;
 
+pub use error::{ Error, SourceReadFailureContents };
+
 pub type StoreIndex = String;
-
-#[derive(Debug)]
-pub struct SourceReadFailureContents {
-    entry_index: StoreIndex,
-    failure_message: String,
-}
-
-#[derive(Debug)]
-pub enum Error {
-    Native(String),
-    SourceReadFailure(SourceReadFailureContents),
-    AlreadyInStore(StoreIndex),
-}
 
 pub struct Node {
     pub text_content: Option<String>,
@@ -63,26 +54,6 @@ impl NodeAsync {
         &*node_ref as *const Node
     }
 
-    pub fn to_string(&self) -> String {
-        let mut result = String::new();
-
-        {
-            result += &self.read().unwrap().name;
-        }
-
-        // TODO: more
-
-        let parent: &Option<Weak<RwLock<Node>>> = &self.read().unwrap().parent;
-        if parent.is_some() {
-            let parent_handle = parent.as_ref().unwrap();
-            let parent_turned: NodeAsync = parent_handle.upgrade().unwrap().into();
-            let parent_str = parent_turned.to_string();
-            result = format!("{} > {}", parent_str, result);
-        }
-
-        result
-    }
-
     pub fn get_leaves(&self) -> Arc<[NodeAsync]> {
         let mut stack: Vec<NodeAsync> = vec![self.clone()];
         let mut leaves: Vec<NodeAsync> = vec![];
@@ -103,6 +74,36 @@ impl NodeAsync {
     }
 }
 
+impl Deref for NodeAsync {
+    type Target = Arc<RwLock<Node>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for NodeAsync {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let mut result = String::new();
+
+        {
+            result += &self.read().unwrap().name;
+        }
+
+        // TODO: more
+
+        let parent: &Option<Weak<RwLock<Node>>> = &self.read().unwrap().parent;
+        if parent.is_some() {
+            let parent_handle = parent.as_ref().unwrap();
+            let parent_turned: NodeAsync = parent_handle.upgrade().unwrap().into();
+            let parent_str = parent_turned.to_string();
+            result = format!("{} > {}", parent_str, result);
+        }
+
+        write!(f, "{}", result)
+    }
+}
+
 impl From<Node> for NodeAsync {
     fn from(alt: Node) -> NodeAsync {
         NodeAsync(Arc::new(RwLock::new(alt)))
@@ -112,14 +113,6 @@ impl From<Node> for NodeAsync {
 impl From<Arc<RwLock<Node>>> for NodeAsync {
     fn from(value: Arc<RwLock<Node>>) -> NodeAsync {
         NodeAsync(value)
-    }
-}
-
-impl Deref for NodeAsync {
-    type Target = Arc<RwLock<Node>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -164,7 +157,7 @@ impl From<Xml::Element> for NodeAsync {
             let child_turned = NodeAsync::from(element_unwrapped.to_owned());
             child_turned.write().unwrap().parent = Some(Arc::downgrade(&node.0));
 
-            children.push(child_turned.into());
+            children.push(child_turned);
         }
 
         if ! text_content.is_empty() {
@@ -188,7 +181,7 @@ impl Store {
 
     pub fn append(self: &Arc<Self>, index: StoreIndex, template: Templating::StoreEntryAsync) -> Result<StoreEntryAsync, Error> {
         if self.has(index.clone()) {
-            return Err(Error::AlreadyInStore(index.into()));
+            Err(Error::AlreadyInStore(index))
         }
         else {
             let mut store_guard = self.indices.write().unwrap();
@@ -218,7 +211,7 @@ impl Store {
                     }
                 },
                 Err(err) => Err(Error::SourceReadFailure(SourceReadFailureContents{
-                    entry_index: index.into(),
+                    entry_index: index,
                     failure_message: err.to_string(),
                 }))
             }
@@ -232,9 +225,6 @@ impl Store {
 
     pub fn get(self: &Arc<Self>, index: StoreIndex) -> Option<StoreEntryAsync> {
         let indices_guard = self.indices.read().unwrap();
-        match indices_guard.get(&index) {
-            None => None,
-            Some(entry) => Some(entry.clone())
-        }
+        indices_guard.get(&index).cloned()
     }
 }

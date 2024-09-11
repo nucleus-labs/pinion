@@ -13,6 +13,7 @@
         devShell = with pkgs; mkShell {
           packages = with pkgs; [
             valgrind-light
+            clippy
           ];
 
           buildInputs = [

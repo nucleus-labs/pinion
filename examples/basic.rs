@@ -1,12 +1,11 @@
-#![allow(unused_imports)]
 
 use std::time::Duration;
 use std::thread::sleep;
 use std::ffi::OsStr;
 
-use quill::template as Template;
-use quill::xml as Xml;
-use quill::selector as Select;
+use pinion::template as Template;
+use pinion::xml as Xml;
+use pinion::selector as Select;
 
 pub fn main() {
     let template_store = Template::Store::new();

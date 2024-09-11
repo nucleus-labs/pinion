@@ -1,25 +1,29 @@
+#![allow(dead_code)]
+#![allow(clippy::arc_with_non_send_sync)]
 
+use std::rc::Rc;
 use std::sync::{ RwLock, Arc };
 use std::collections::{HashMap, HashSet};
 
 use crate::xml::{ NodeAsync, Node };
 
+
 type AttributeSelector = Vec<(String, Option<String>)>;
-type PseudoclassSelector = HashMap<String, Arc<NodeSelector>>;
+type PseudoclassSelector = HashMap<String, Rc<NodeSelector>>;
 
 #[derive(Clone)]
 pub struct NodeSelector {
     namespace: Option<String>,                  // namespace()
-
+    
     type_name: Option<String>,                  // named()
     id: Option<String>,                         // is()
-    classes: Arc<[String]>,                     // classes()
+    classes: Rc<[String]>,                      // classes()
     attributes: AttributeSelector,              // with()
     parent: Option<Box<NodeSelector>>,          // child()
     
     is_universal: bool,                         // NodeSelector::any()
     pseudoclasses: PseudoclassSelector,         // variant()
-
+    
     visited: Arc<RwLock<HashSet<*const Node>>>,
 }
 
@@ -28,8 +32,8 @@ impl NodeSelector {
         Self{
             namespace: None,
 
-            type_name: None.into(),
-            id: None.into(),
+            type_name: None,
+            id: None,
             classes: [].into(),
             attributes: AttributeSelector::new(),
             parent: None,
@@ -45,8 +49,8 @@ impl NodeSelector {
         Self{
             namespace: None,
 
-            type_name: None.into(),
-            id: None.into(),
+            type_name: None,
+            id: None,
             classes: [].into(),
             attributes: AttributeSelector::new(),
             parent: None,
@@ -56,23 +60,6 @@ impl NodeSelector {
 
             visited: Arc::new(RwLock::new(HashSet::new())),
         }
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut result = String::new();
-
-        if self.type_name.is_some() {
-            result += &self.type_name.as_ref().unwrap();
-        }
-
-        // TODO: more
-
-        if self.parent.is_some() {
-            let parent_str = self.parent.as_ref().unwrap().to_string();
-            result = format!("{} > {}", parent_str, result);
-        }
-
-        result
     }
 
     // supply functions
@@ -163,10 +150,8 @@ impl NodeSelector {
             }
             else {
                 for (attribute, value) in self.attributes.iter() {
-                    if ! node_guard.attributes.contains_key(attribute) {
-                        return false;
-                    }
-                    else if value.as_ref().is_some_and(|x| x != node_guard.attributes.get(attribute).unwrap()) {
+                    if (! node_guard.attributes.contains_key(attribute))
+                            || value.as_ref().is_some_and(|x| x != node_guard.attributes.get(attribute).unwrap()) {
                         return false;
                     }
                 }
@@ -198,14 +183,11 @@ impl NodeSelector {
         while let Some(node_handle) = current_node {
             if self.match_immediate(node_handle.clone()) {
                 results.push(node_handle.clone());
-                println!("found match: {}", node_handle.to_string());
+                println!("found match: {}", node_handle);
             }
 
             let parent = node_handle.read().unwrap().parent.clone();
-            current_node = match parent {
-                Some(parent_handle) => Some(parent_handle.upgrade().unwrap().into()),
-                None => None,
-            };
+            current_node = parent.map(|parent_handle| parent_handle.upgrade().unwrap().into());
         }
 
         results
@@ -214,7 +196,7 @@ impl NodeSelector {
     pub fn clear_visited(&self) {
         self.visited.write().unwrap().clear();
         if self.parent.is_some() {
-            self.parent.as_ref().unwrap().clear_visited();
+            self.parent.as_deref().unwrap().clear_visited();
         }
     }
 
@@ -227,5 +209,28 @@ impl NodeSelector {
         }
     
         results
+    }
+}
+
+impl Default for NodeSelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl core::fmt::Display for NodeSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        let mut result = String::new();
+
+        result += self.type_name.as_deref().unwrap_or("");
+
+        // TODO: more
+
+        if self.parent.is_some() {
+            let parent_str = self.parent.as_ref().unwrap().to_string();
+            result = format!("{} > {}", parent_str, result);
+        }
+
+        write!(f, "{}", result)
     }
 }
