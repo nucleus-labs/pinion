@@ -3,9 +3,9 @@ use std::time::Duration;
 use std::thread::sleep;
 use std::ffi::OsStr;
 
-use pinion::template as Template;
-use pinion::xml as Xml;
-use pinion::selector as Select;
+use peacock_pinion::template as Template;
+use peacock_pinion::xml as Xml;
+use peacock_pinion::selector as Select;
 
 pub fn main() {
     let template_store = Template::Store::new();
@@ -39,7 +39,7 @@ pub fn main() {
 
     let dom_store = Xml::Store::new();
 
-    let index_dom = dom_store.append("index".into(), index_template).unwrap();
+    let index_dom = dom_store.write().unwrap().append_from_template("index".into(), index_template).unwrap();
 
     {
         let dom_guard = index_dom.read().unwrap();
@@ -59,7 +59,7 @@ pub fn main() {
     // loop for profiling purposes
     loop {
         template_store.has("index".into());
-        dom_store.has("index".into());
+        dom_store.read().unwrap().has("index".into());
         
         let mut selector_handle = row_selector.write().unwrap();
 

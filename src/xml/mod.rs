@@ -5,6 +5,7 @@ use xmltree as Xml;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, RwLock, Weak};
+use std::cell::OnceCell;
 use std::ops::Deref;
 use std::vec::Vec;
 
@@ -15,6 +16,7 @@ pub use error::{ Error, SourceReadFailureContents };
 
 pub type StoreIndex = String;
 
+#[derive(Debug)]
 pub struct Node {
     pub text_content: Option<String>,
 
@@ -28,19 +30,22 @@ pub struct Node {
     pub children: Vec<NodeAsync>,
     pub parent: Option<Weak<RwLock<Node>>>,
 }
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct NodeAsync(pub AsyncHandle<Node>);
 
+#[derive(Debug)]
 pub struct StoreEntry {
-    pub store: Weak<Store>,
+    pub store: Weak<RwLock<Store>>,
     pub index: StoreIndex,
     pub nodes: Arc<[NodeAsync]>,
     pub source: String,
 }
 pub type StoreEntryAsync = AsyncHandle<StoreEntry>;
 
+#[derive(Debug, Clone)]
 pub struct Store {
-    indices: AsyncHandle<HashMap<StoreIndex, StoreEntryAsync>>
+    pub indices: AsyncHandle<HashMap<StoreIndex, StoreEntryAsync>>,
+    handle: OnceCell<Arc<RwLock<Self>>>,
 }
 
 impl NodeAsync {
@@ -173,13 +178,22 @@ impl From<Xml::Element> for NodeAsync {
 }
 
 impl Store {
-    pub fn new() -> Arc<Store> {
-        Store{
-            indices: Arc::new(RwLock::new(HashMap::new()))
-        }.into()
+    pub fn new() -> Arc<RwLock<Store>> {
+        let store = Store{
+            indices: Arc::new(RwLock::new(HashMap::new())),
+            handle: OnceCell::new(),
+        };
+        
+        let arc: Arc<RwLock<Store>> = Arc::new(RwLock::new(store));
+        arc.write().unwrap().handle.set(arc.clone()).unwrap();
+        arc.clone()
     }
 
-    pub fn append(self: &Arc<Self>, index: StoreIndex, template: Templating::StoreEntryAsync) -> Result<StoreEntryAsync, Error> {
+    pub fn get_handle(&self) -> Arc<RwLock<Store>> {
+        self.handle.get().unwrap().clone()
+    }
+
+    pub fn append_from_template(&mut self, index: StoreIndex, template: Templating::StoreEntryAsync) -> Result<StoreEntryAsync, Error> {
         if self.has(index.clone()) {
             Err(Error::AlreadyInStore(index))
         }
@@ -195,7 +209,7 @@ impl Store {
                         .collect();
 
                     let store_entry: StoreEntryAsync = Arc::new(RwLock::new(StoreEntry{
-                        store: Arc::downgrade(self),
+                        store: Arc::downgrade(&self.get_handle()),
                         nodes: nodes_async_vec[..].into(),
                         index,
                         source: readable_guard.source.clone(),
@@ -218,12 +232,50 @@ impl Store {
         }
     }
 
-    pub fn has(self: &Arc<Self>, index: StoreIndex) -> bool {
+    pub fn append_from_source(&mut self, index: StoreIndex, source: String) -> Result<StoreEntryAsync, Error> {
+        if self.has(index.clone()) {
+            Err(Error::AlreadyInStore(index))
+        }
+        else {
+            let mut store_guard = self.indices.write().unwrap();
+
+            match Xml::Element::parse_all(source.as_bytes()) {
+                Ok(nodes_vec) => {
+                    let nodes_async_vec: Vec<NodeAsync> = nodes_vec.into_iter()
+                        .filter(|x| matches!(x, Xml::XMLNode::Element(_)))
+                        .map(|x| NodeAsync::from((*x.as_element().unwrap()).to_owned()))
+                        .collect();
+
+                    let store_entry: StoreEntryAsync = Arc::new(RwLock::new(StoreEntry{
+                        store: Arc::downgrade(&self.get_handle()),
+                        nodes: nodes_async_vec[..].into(),
+                        index,
+                        source: source.clone(),
+                    }));
+                    let entry_index: StoreIndex;
+                    {
+                        let entry_guard = store_entry.read().unwrap();
+                        entry_index = entry_guard.index.clone();
+                    }
+                    match store_guard.insert(entry_index.clone(), store_entry.clone()) {
+                        Some(_) => Err(Error::AlreadyInStore(entry_index)),
+                        None => Ok(store_entry),
+                    }
+                },
+                Err(err) => Err(Error::SourceReadFailure(SourceReadFailureContents{
+                    entry_index: index,
+                    failure_message: err.to_string(),
+                }))
+            }
+        }
+    }
+
+    pub fn has(&self, index: StoreIndex) -> bool {
         let indices_guard = self.indices.read().unwrap();
         indices_guard.contains_key(&index)
     }
 
-    pub fn get(self: &Arc<Self>, index: StoreIndex) -> Option<StoreEntryAsync> {
+    pub fn get(&self, index: StoreIndex) -> Option<StoreEntryAsync> {
         let indices_guard = self.indices.read().unwrap();
         indices_guard.get(&index).cloned()
     }
