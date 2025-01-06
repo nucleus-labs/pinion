@@ -1,4 +1,3 @@
-
 use derive_more::From;
 
 use super::StoreIndex;
