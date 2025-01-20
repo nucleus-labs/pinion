@@ -8,7 +8,7 @@ use std::ops::Deref;
 use std::sync::{Arc, RwLock, Weak};
 use std::vec::Vec;
 
-use crate::template as Templating;
+use crate::template;
 use crate::AsyncHandle;
 
 pub use error::{Error, SourceReadFailureContents};
@@ -18,14 +18,12 @@ pub type Namespace = String;
 
 #[derive(Debug)]
 pub struct XmlNode {
-    pub text_content: Option<String>,
-
     pub prefix: Option<String>,
     pub namespace: Option<Namespace>,
     pub namespaces: Option<BTreeMap<String, String>>,
 
     pub name: String,
-    pub attributes: HashMap<(Namespace, String), Vec<String>>,
+    pub attributes: HashMap<(Namespace, String), String>,
 
     pub children: Vec<NodeAsync>,
     pub parent: Option<Weak<RwLock<XmlNode>>>,
@@ -55,9 +53,9 @@ impl XmlNode {
         self.attributes.contains_key(key)
     }
 
-    pub fn get_attribute(&self, namespace: &str, attribute: &str) -> Vec<String> {
+    pub fn get_attribute(&self, namespace: &str, attribute: &str) -> Option<String> {
         let key = &(namespace.into(), attribute.into());
-        self.attributes.get(key).unwrap().clone()
+        self.attributes.get(key).cloned()
     }
 }
 
@@ -158,31 +156,33 @@ impl From<xmltree::Element> for NodeAsync {
         let namespace: Option<String> = match native_node.namespace {
             Some(namespace) => {
                 let mut result: Option<String> = None;
-                for (key, value) in namespaces.as_ref().unwrap().iter() {
-                    if *value == namespace {
-                        result = Some(key.into());
-                        break;
+
+                if namespaces.is_some() {
+                    for (key, value) in namespaces.as_ref().unwrap().iter() {
+                        if *value == namespace {
+                            result = Some(key.into());
+                            break;
+                        }
                     }
                 }
+
                 result
             }
             None => None,
         };
 
-        let mut attributes: HashMap<(Namespace, String), Vec<String>> = HashMap::new();
-        // k: &String, v: &String
-        for (k, v) in native_node.attributes.iter() {
-            let values: Vec<String> = v.split_whitespace().map(|x| x.into()).collect();
+        let mut attributes: HashMap<(Namespace, String), String> = HashMap::new();
+        // k: String, v: String
+        for (k, v) in native_node.attributes.into_iter() {
             let (mut namespace, name) = k.split_at(k.find(":").unwrap_or(0usize));
             if namespace.is_empty() {
                 namespace = "Default";
             }
-            attributes.insert((namespace.into(), name.into()), values);
+            attributes.insert((namespace.into(), name.into()), v);
         }
+        attributes.entry(("Default".into(), "id".into())).or_insert_with(|| format!("pk-{}", uuid::Uuid::new_v4()));
 
         let node: NodeAsync = Self(Arc::new(RwLock::new(XmlNode {
-            text_content: None,
-
             prefix: native_node.prefix,
             namespace,
             namespaces,
@@ -194,31 +194,27 @@ impl From<xmltree::Element> for NodeAsync {
             parent: None,
         })));
 
-        let mut text_content = String::new();
         let mut children: Vec<NodeAsync> = Vec::new();
 
         for child in native_node.children.iter() {
             match child {
-                xmltree::XMLNode::Element(_) => (),
                 xmltree::XMLNode::Text(content) => {
-                    text_content += content;
-                    text_content += "\n";
-                    continue;
+                    let mut text_element = xmltree::Element::new("text-content");
+                    text_element.namespace = Some("Default".into());
+                    text_element.attributes.insert("id".into(), format!("pk-{}", uuid::Uuid::new_v4()));
+                    text_element.attributes.insert("content".into(), content.trim().to_string());
+
+                    let child_turned = NodeAsync::from(text_element);
+                    child_turned.write().unwrap().parent = Some(Arc::downgrade(&node.0));
+                    children.push(child_turned);
                 }
+                xmltree::XMLNode::Element(element) => {
+                    let child_turned = NodeAsync::from(element.clone());
+                    child_turned.write().unwrap().parent = Some(Arc::downgrade(&node.0));
+                    children.push(child_turned);
+                },
                 _ => continue,
             }
-
-            // assumption safe because of above matching
-            let element_unwrapped = child.as_element().unwrap();
-
-            let child_turned = NodeAsync::from(element_unwrapped.to_owned());
-            child_turned.write().unwrap().parent = Some(Arc::downgrade(&node.0));
-
-            children.push(child_turned);
-        }
-
-        if !text_content.is_empty() {
-            node.write().unwrap().text_content = Some(text_content);
         }
 
         {
@@ -251,7 +247,7 @@ impl XmlStore {
     pub fn append_from_template(
         &mut self,
         index: StoreIndex,
-        template: Templating::StoreEntryAsync,
+        template: template::StoreEntryAsync,
     ) -> Result<StoreEntryAsync, Error> {
         if self.has(index.clone()) {
             Err(Error::AlreadyInStore(index))

@@ -1,10 +1,7 @@
 mod error;
 
-pub use minijinja::{context, Value};
-
 use std::cell::OnceCell;
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fs;
 use std::sync::{Arc, RwLock, Weak};
 
@@ -30,7 +27,7 @@ pub struct TemplateStore<'a> {
 }
 
 impl<'a> StoreEntry<'a> {
-    pub fn render(self: Arc<StoreEntry<'a>>, context: Value) -> Result<String> {
+    pub fn render(&self, context: minijinja::Value) -> Result<String> {
         let store_handle = self.store.upgrade().unwrap();
         let store_guard = store_handle.read().unwrap();
         let env_guard = store_guard.env.read().unwrap();
@@ -64,7 +61,31 @@ impl<'a> TemplateStore<'a> {
         self.handle.get().unwrap().clone()
     }
 
-    pub fn append(&self, index: StoreIndex, path: &'a OsStr) -> Result<StoreEntryAsync<'a>> {
+    pub fn append_raw(&self, index: StoreIndex, source: String) -> Result<StoreEntryAsync<'a>> {
+        if self.has(&index) {
+            Err(Error::AlreadyInStore(index.clone()).into())
+        } else {
+            #[allow(clippy::arc_with_non_send_sync)]
+            let entry: StoreEntryAsync<'a> = Arc::new(RwLock::new(StoreEntry {
+                store: Arc::downgrade(&self.get_handle()),
+                index: index.clone(),
+                source,
+            }));
+
+            let mut store_guard = self.indices.write().unwrap();
+            store_guard.insert(index.clone(), entry.clone());
+
+            let mut env_guard = self.env.write().unwrap();
+            let result =
+                env_guard.add_template_owned(index, entry.read().unwrap().source.clone());
+            match result {
+                Ok(_) => Ok(entry),
+                Err(err) => Err(Error::Native(err).into()),
+            }
+        }
+    }
+
+    pub fn append_from_file(&self, index: StoreIndex, path: &std::path::Path) -> Result<StoreEntryAsync<'a>> {
         if self.has(&index) {
             Err(Error::AlreadyInStore(index.clone()).into())
         } else {

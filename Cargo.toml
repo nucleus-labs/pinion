@@ -10,3 +10,4 @@ minijinja.version = "2.2.0"
 xmltree = "0.11.0"
 
 derive_more = { version = "1.0.0", features = [ "from" ] }
+uuid = { version = "1.11.0", features = ["v4"] }
