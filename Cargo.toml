@@ -1,13 +1,18 @@
 [package]
-name = "peacock-pinion"
-version = "0.1.0"
-authors = ["Maxine Alexander <Max.Alexander3721@gmail.com>"]
-edition = "2021"
+    name = "peacock-pinion"
+    description = "A library for jinja2 templating and XML parsing"
+    version = "0.1.0"
+    authors = ["Maxine Alexander <Max.Alexander3721@gmail.com>"]
+    edition = "2021"
+    readme = "README.md"
+    repository.workspace = true
+    license.workspace = true
+    keywords = ["xml", "templating"]
+    categories = ["template-engine", "parsing", "data-structures"]
 
 [dependencies]
-minijinja.features = ["loader"]
-minijinja.version = "2.2.0"
-xmltree = "0.11.0"
-
-derive_more = { version = "1.0.0", features = [ "from" ] }
-uuid = { version = "1.11.0", features = ["v4"] }
+    minijinja.features = ["loader"]
+    minijinja.version = "2.2.0"
+    xmltree = "0.11.0"
+    derive_more = { version = "1.0.0", features = [ "from" ] }
+    uuid = { version = "1.11.0", features = ["v4"] }

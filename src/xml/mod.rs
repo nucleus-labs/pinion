@@ -249,7 +249,7 @@ impl XmlStore {
         index: StoreIndex,
         template: template::StoreEntryAsync,
     ) -> Result<StoreEntryAsync, Error> {
-        if self.has(index.clone()) {
+        if self.has(&index) {
             Err(Error::AlreadyInStore(index))
         } else {
             let mut store_guard = self.indices.write().unwrap();
@@ -293,7 +293,7 @@ impl XmlStore {
         index: StoreIndex,
         source: String,
     ) -> Result<StoreEntryAsync, Error> {
-        if self.has(index.clone()) {
+        if self.has(&index) {
             Err(Error::AlreadyInStore(index))
         } else {
             let mut store_guard = self.indices.write().unwrap();
@@ -331,13 +331,18 @@ impl XmlStore {
         }
     }
 
-    pub fn has(&self, index: StoreIndex) -> bool {
+    pub fn has(&self, index: &StoreIndex) -> bool {
         let indices_guard = self.indices.read().unwrap();
-        indices_guard.contains_key(&index)
+        indices_guard.contains_key(index)
     }
 
-    pub fn get(&self, index: StoreIndex) -> Option<StoreEntryAsync> {
+    pub fn get(&self, index: &StoreIndex) -> Option<StoreEntryAsync> {
         let indices_guard = self.indices.read().unwrap();
-        indices_guard.get(&index).cloned()
+        indices_guard.get(index).cloned()
+    }
+
+    pub fn remove(&mut self, index: &StoreIndex) {
+        let mut indices_guard = self.indices.write().unwrap();
+        indices_guard.remove(index);
     }
 }

@@ -115,16 +115,16 @@ impl<'a> TemplateStore<'a> {
         }
     }
 
-    pub fn has(&self, index: &str) -> bool {
+    pub fn has(&self, index: &StoreIndex) -> bool {
         let indices_guard = self.indices.read().unwrap();
         indices_guard.contains_key(index)
     }
 
-    pub fn get(&self, index: StoreIndex) -> StoreEntryAsync<'a> {
+    pub fn get(&self, index: &StoreIndex) -> StoreEntryAsync<'a> {
         self.indices
             .read()
             .unwrap()
-            .get(&index)
+            .get(index)
             .unwrap_or_else(|| panic!("Tried to get non-existent index '{}'", index))
             .clone()
     }
